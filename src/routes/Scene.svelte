@@ -1,14 +1,53 @@
 <script lang="ts">
-	import { T, useTask } from '@threlte/core';
-	import { interactivity } from '@threlte/extras';
+	import { T, useTask, useLoader } from '@threlte/core';
+	import { interactivity, useSuspense, OrbitControls } from '@threlte/extras';
+	import { useGamepad } from '@threlte/extras';
+	import { Collider, RigidBody, useRapier, useRigidBody } from '@threlte/rapier';
+
 	import { spring } from 'svelte/motion';
+	import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
+	import { throttle, aileron, elevator, rudder } from './stores';
+	import { DEG2RAD } from 'three/src/math/MathUtils';
+	import Ground from './Ground.svelte';
+	import { degToRad } from 'three/src/math/MathUtils.js';
+
+	const gamepad = useGamepad({ index: 0 });
+
+	const loader = useLoader(STLLoader);
+	const suspend = useSuspense();
 
 	interactivity();
-	const scale = spring(1);
+	const scale = spring(0.1);
 
 	let rotation = 0;
-	useTask((delta) => {
-		rotation += delta;
+	let rigid = 0;
+
+	gamepad.clusterBottom.on('down', () => {
+		if ($throttle <= 0.9) {
+			throttle.update((v) => v + 0.1);
+		}
+	});
+	gamepad.clusterLeft.on('down', () => {
+		if ($throttle >= 0.1) {
+			throttle.update((v) => v - 0.1);
+		}
+	});
+
+	throttle.subscribe((v) => {
+		if (rigid) {
+			// console.log(rigid);
+			console.log(rigid.addForce);
+			// rigid.applyImpulse([0, 0, v * 1000]);
+		}
+	});
+
+	gamepad.leftStick.on('change', (event) => {
+		aileron.set(event.value.x);
+		elevator.set(event.value.y);
+	});
+
+	gamepad.rightStick.on('change', (event) => {
+		rudder.set(event.value.x);
 	});
 </script>
 
@@ -18,23 +57,23 @@
 	on:create={({ ref }) => {
 		ref.lookAt(0, 1, 0);
 	}}
-/>
+>
+	<OrbitControls />
+</T.PerspectiveCamera>
 
 <T.DirectionalLight position={[0, 10, 10]} castShadow />
 
-<T.Mesh
-	rotation.y={rotation}
-	position.y={1}
-	scale={$scale}
-	on:pointerenter={() => scale.set(1.5)}
-	on:pointerleave={() => scale.set(1)}
-	castShadow
->
-	<T.BoxGeometry args={[1, 2, 1]} />
-	<T.MeshStandardMaterial color="hotpink" />
-</T.Mesh>
+{#await suspend(loader.load('/200-mig17.stl')) then geometry}
+	<T.Group position={[0, 3, 0]} rotation={[-90 * DEG2RAD, 0, 0]}>
+		<RigidBody bind:this={rigid}>
+			<T.Mesh scale={0.15} castShadow>
+				<T is={geometry} />
+				<T.MeshStandardMaterial color="#FFFFFF" />
+			</T.Mesh>
+			<Collider shape={'cuboid'} args={[1, 3.5, 1]}></Collider>
+		</RigidBody>
+	</T.Group>
+{/await}
 
-<T.Mesh rotation.x={-Math.PI / 2} receiveShadow>
-	<T.CircleGeometry args={[4, 40]} />
-	<T.MeshStandardMaterial color="white" />
-</T.Mesh>
+<T.GridHelper args={[100]} />
+<Ground />
