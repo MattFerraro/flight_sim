@@ -20,7 +20,7 @@
 	const scale = spring(0.1);
 
 	let rotation = 0;
-	let rigid = 0;
+	let rigid: any;
 
 	gamepad.clusterBottom.on('down', () => {
 		if ($throttle <= 0.9) {
@@ -35,9 +35,10 @@
 
 	throttle.subscribe((v) => {
 		if (rigid) {
-			// console.log(rigid);
-			console.log(rigid.addForce);
-			// rigid.applyImpulse([0, 0, v * 1000]);
+			console.log(v);
+			// rigid.resetForces(true);
+			rigid.addForce({ x: 0.0, y: 0.0, z: $throttle * 400.0 }, true);
+			// rigid.addForce({ x: v * 0.001, y: 0, z: 0 }, true);
 		}
 	});
 
@@ -49,6 +50,15 @@
 	gamepad.rightStick.on('change', (event) => {
 		rudder.set(event.value.x);
 	});
+
+	function handleKeydown(event) {
+		if (event.key === 'ArrowUp') {
+			throttle.update((v) => v + 0.1);
+		}
+		if (event.key === 'ArrowDown') {
+			throttle.update((v) => v - 0.1);
+		}
+	}
 </script>
 
 <T.PerspectiveCamera
@@ -65,7 +75,11 @@
 
 {#await suspend(loader.load('/200-mig17.stl')) then geometry}
 	<T.Group position={[0, 3, 0]} rotation={[-90 * DEG2RAD, 0, 0]}>
-		<RigidBody bind:this={rigid}>
+		<RigidBody
+			on:create={({ ref }) => {
+				rigid = ref;
+			}}
+		>
 			<T.Mesh scale={0.15} castShadow>
 				<T is={geometry} />
 				<T.MeshStandardMaterial color="#FFFFFF" />
@@ -77,3 +91,5 @@
 
 <T.GridHelper args={[100]} />
 <Ground />
+
+<svelte:window on:keydown={handleKeydown} />
